@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+
 [RequireComponent(typeof(MeshFilter))]
 public class MeshGenerator : MonoBehaviour
 {
@@ -27,6 +28,7 @@ public class MeshGenerator : MonoBehaviour
     private int meshHeight;
 
     private List<TerrainNode> tempMask;
+    private List<TerrainNode> tempPath;
 
     TerrainNode[,] nodes;
 
@@ -41,7 +43,16 @@ public class MeshGenerator : MonoBehaviour
         CreateShape();
         UpdateMesh();
         tempMask = GenerateMask(7, 13);
-        
+
+
+        tempPath = FindPath(nodes[7, 13], nodes[30, 55]);
+
+        string path_out = "Path:";
+        foreach (TerrainNode t in tempPath)
+        {
+            path_out += t.ToString() + "->";
+        }
+        Debug.Log(path_out);
     }
 
 
@@ -103,6 +114,8 @@ public class MeshGenerator : MonoBehaviour
         }
     }
 
+    
+
     void UpdateMesh()
     {
         mesh.Clear();
@@ -112,11 +125,6 @@ public class MeshGenerator : MonoBehaviour
         mesh.RecalculateNormals();
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 
     private float GetHeight(int x, int z)
     {
@@ -157,9 +165,19 @@ public class MeshGenerator : MonoBehaviour
                     Gizmos.color = Color.green;
                     Gizmos.DrawSphere(nodes[x, z].GetVertex(), 0.1f);
                 }
-                else if (tempMask.Contains(nodes[x,z]))
+                else if (x == 30 && z == 55)
                 {
                     Gizmos.color = Color.red;
+                    Gizmos.DrawSphere(nodes[x, z].GetVertex(), 0.1f);
+                }
+                else if (tempMask.Contains(nodes[x,z]))
+                {
+                    Gizmos.color = Color.cyan;
+                    Gizmos.DrawSphere(nodes[x, z].GetVertex(), 0.1f);
+                }
+                else if (tempPath.Contains(nodes[x,z]))
+                {
+                    Gizmos.color = Color.yellow;
                     Gizmos.DrawSphere(nodes[x, z].GetVertex(), 0.1f);
                 }
                 else
@@ -171,15 +189,7 @@ public class MeshGenerator : MonoBehaviour
             }
         }
 
-        //for (int i = 0; i < vertices.Length; i++)
-        //{
-            
-
-
-        //    Gizmos.DrawSphere(vertices[i], 0.1f);
-
-        //    Gizmos.color = Color.gray;
-        //}
+        
     }
 
     public List<TerrainNode> GenerateMask(int i, int j)
@@ -205,6 +215,185 @@ public class MeshGenerator : MonoBehaviour
         }
 
         return mask;
+    }
+
+    List<TerrainNode> FindPath(TerrainNode start, TerrainNode end)
+    {
+        List<TerrainNode> path = new List<TerrainNode>();
+
+        // Add Start node to priority queue
+        // Get mask at this location
+        // Cost all nodes in the mask and add to priority queue
+        // 
+        // while pq not empty
+        //  pop top
+        //  check if goal, if yes, return
+        //  check mask
+        //  for each neighbor
+        //    compute cost
+        //    if not on open or closed add to pq
+        //    if on closed or open and new is cheaper
+        //      remove old and add new with lower cost
+        //  put current node on closed list
+        //  if open list is empty, no path found
+
+        SearchNode goal = new SearchNode();
+        goal.Row = end.Row;
+        goal.Col = end.Col;
+
+        List<SearchNode> open = new List<SearchNode>();
+        List<SearchNode> closed = new List<SearchNode>();
+        SearchNode front = new SearchNode();
+        front.givenCost = 0;
+        front.heuristicCost = TerrainNode.Distance(start, end);
+        front.Row = start.Row;
+        front.Col = start.Col;
+        front.prev = null;
+        open.Add(front);
+
+        while(open.Count > 0)
+        {
+            // Find the lowest value
+            float lowestCost = float.MaxValue;
+            int lowestIndex = 0;
+            for (int i = 0; i < open.Count; i++)
+            {
+                float currentCost = open[i].givenCost + open[i].heuristicCost;
+                if (currentCost < lowestCost)
+                {
+                    lowestCost = currentCost;
+                    lowestIndex = i;
+                }
+            }
+
+            // Pop the top
+            SearchNode curr = open[lowestIndex];
+            open.RemoveAt(lowestIndex);
+
+            // Check if its the goal
+            if (curr.Equals(goal))
+            {
+                // If it is return the path
+                // Back propogate and build the path
+                
+                //path.Insert(path.Count, );
+                while (curr != null)
+                {
+                    path.Add(nodes[curr.Row, curr.Col]);
+                    curr = curr.prev;
+                }
+                
+                return path;
+            }
+
+            List<TerrainNode> mask = GenerateMask(curr.Row, curr.Col);
+            foreach(TerrainNode t in mask)
+            {
+                SearchNode sn = new SearchNode();
+                sn.givenCost = curr.givenCost +
+                                TerrainNode.Distance(
+                                    nodes[curr.Row, curr.Col],
+                                    nodes[t.Row, t.Col]
+                                );
+
+                sn.heuristicCost = TerrainNode.Distance(
+                                    end,
+                                    nodes[t.Row, t.Col]
+                                );
+
+                sn.Row = t.Row;
+                sn.Col = t.Col;
+                sn.prev = curr;
+
+                bool onOpen = open.Contains(sn);
+                bool onClosed = closed.Contains(sn);
+
+                if (!onOpen && !onClosed)
+                {
+                    open.Add(sn);
+                }
+                
+                if (onOpen || onClosed)
+                {
+                    if (onOpen)
+                    {
+                        for (int i = 0; i < open.Count; i++)
+                        {
+                            if (open[i].Equals(sn) && sn.Cost < open[i].Cost)
+                            {
+                                open[i].givenCost = sn.givenCost;
+                                open[i].heuristicCost = sn.heuristicCost;
+                                open[i].prev = sn.prev;
+                            }
+                        }
+                    }
+                    else if (onClosed)
+                    {
+                        for (int i = 0; i < closed.Count; i++)
+                        {
+                            if (closed[i].Equals(sn) && sn.Cost < closed[i].Cost)
+                            {
+                                closed.RemoveAt(i);
+                                open.Add(sn);
+                            }
+                        }
+                    }
+                }
+                
+            }
+            closed.Add(curr);
+            
+        }
+
+        // If path is empty, no path found
+        return path;
+    }
+}
+
+public class SearchNode : IComparable<SearchNode>
+{
+    public Vector2Int gridPos;
+    public float givenCost;
+    public float heuristicCost;
+    public SearchNode prev;
+
+    public int Row { get { return gridPos.x; } set { gridPos.x = value; } }
+    public int Col { get { return gridPos.y; } set { gridPos.y = value; } }
+
+    public float Cost { get { return givenCost + heuristicCost; } }
+
+    public int CompareTo(SearchNode other)
+    {
+        float cost = (this.givenCost + this.heuristicCost) -
+            (other.givenCost + other.heuristicCost);
+        if (Mathf.Approximately(cost, 0))
+        {
+            return 0;
+        }
+
+        if (cost < 0)
+        {
+            return -1;
+        }
+        else
+        {
+            return 1;
+        }
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (obj.GetType() == typeof(SearchNode))
+        {
+            SearchNode node = (SearchNode)obj;
+
+            if (this.Row == node.Row && this.Col == node.Col)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -234,6 +423,15 @@ public class TerrainNode : IComparable<TerrainNode>
         float diffH = t1.height - t2.height;
 
         return (diffX * diffX) + (diffY * diffY) + (diffH * diffH);
+    }
+
+    public static float Distance(TerrainNode t1, TerrainNode t2)
+    {
+        float diffX = t1.Row - t2.Row;
+        float diffY = t1.Col - t2.Col;
+        float diffH = t1.height - t2.height;
+
+        return Mathf.Sqrt(diffX * diffX) + (diffY * diffY) + (diffH * diffH);
     }
 
     public int CompareTo(TerrainNode other)
@@ -271,4 +469,8 @@ public class TerrainNode : IComparable<TerrainNode>
         return false;
     }
 
+    public override string ToString()
+    {
+        return "[" + this.Row + ", " + this.Col + "]";
+    }
 }
