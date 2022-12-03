@@ -16,6 +16,9 @@ public class MeshGenerator : MonoBehaviour
 
     public float maskRadius = 3.0f;
 
+    TerrainNode[] nodes;
+
+
     // Start is called before the first frame update
     void Start()
     {
@@ -29,7 +32,7 @@ public class MeshGenerator : MonoBehaviour
     void CreateShape()
     {
         vertices = new Vector3[(gridWidth + 1) * (gridHeight + 1)];
-
+        nodes = new TerrainNode[(gridWidth + 1) * (gridHeight + 1)];
         
         for (int i = 0, z = 0; z <= gridHeight; z++)
         {
@@ -39,6 +42,7 @@ public class MeshGenerator : MonoBehaviour
                 y = Mathf.Min((Mathf.PerlinNoise((x+0.5f) * 0.01f, (z+0.5f) * 0.01f) * amplitude), y);
                 y += Mathf.PerlinNoise(x * 0.05f, z * 0.05f) * 10.0f;
                 vertices[i] = new Vector3(x, y, z);
+                nodes[i] = new TerrainNode(x, z, y);
                 i++;
             }
         }
@@ -91,5 +95,29 @@ public class MeshGenerator : MonoBehaviour
         {
             Gizmos.DrawSphere(vertices[i], 0.1f);
         }
+    }
+}
+
+struct TerrainNode
+{
+    public Vector2Int gridPos;
+    public float height;
+
+    public int Row { get { return gridPos.x; } set { gridPos.x = value; } }
+    public int Col { get { return gridPos.y; } set { gridPos.y = value; } }
+
+    public TerrainNode(int x, int z, float height)
+    {
+        this.gridPos = new Vector2Int(x, z);
+        this.height = height;
+    }
+
+    public static float Distance2(TerrainNode t1, TerrainNode t2)
+    {
+        float diffX = t1.Row - t2.Row;
+        float diffY = t1.Col - t2.Col;
+        float diffH = t2.height - t2.height;
+
+        return (diffX * diffX) + (diffY * diffY) * (diffH * diffH);
     }
 }
