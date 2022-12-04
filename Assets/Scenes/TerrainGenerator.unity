@@ -2957,7 +2957,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 653288859}
         m_TargetAssemblyTypeName: MeshGenerator, Assembly-CSharp
-        m_MethodName: GetPath
+        m_MethodName: GetTerrain
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

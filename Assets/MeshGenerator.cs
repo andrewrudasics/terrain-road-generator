@@ -747,6 +747,53 @@ public class MeshGenerator : MonoBehaviour
         waterPlane.transform.position = curr_pos;
     }
 
+
+    public void SetNoise1Amplitude(float val)
+    {
+        a1 = val;
+    }
+
+    public void SetNoise2Amplitude(float val)
+    {
+        a2 = val;
+    }
+    public void SetNoise3Amplitude(float val)
+    {
+        a3 = val;
+    }
+    public void SetNoise4Amplitude(float val)
+    {
+        a4 = val;
+    }
+
+    public void SetNoise1Frequency(float val)
+    {
+        f1 = val;
+    }
+
+    public void SetNoise2Frequency(float val)
+    {
+        f2 = val;
+    }
+    public void SetNoise3Frequency(float val)
+    {
+        f3 = val;
+    }
+    public void SetNoise4Frequency(float val)
+    {
+        f4 = val;
+    }
+
+    public void SetNoiseXOffset(float val)
+    {
+        xOffset = val;
+    }
+
+    public void SetNoiseZOffset(float val)
+    {
+        zOffset = val;
+    }
+
     #endregion
 }
 
