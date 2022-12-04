@@ -10,11 +10,12 @@ public class Path
     List<Vector2> points;
     [SerializeField, HideInInspector]
     bool isClosed;
-    [SerializeField, HideInInspector]
+    [SerializeField]
     bool autoSetControlPoints;
 
     public Path(Vector2 centre)
     {
+        isClosed = false;
         points = new List<Vector2>
         {
             centre+Vector2.left,

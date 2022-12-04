@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(PathCreator))]
+//[RequireComponent(typeof(PathCreator))]
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class RoadCreator : MonoBehaviour
@@ -13,12 +13,21 @@ public class RoadCreator : MonoBehaviour
     public float roadWidth = 1;
     public bool autoUpdate;
     public float tiling = 1;
+    Path roadPath;
+    public MeshGenerator terrainMesh;
+
+    public void SetPath(Path path)
+    {
+        this.roadPath = path;
+        this.roadPath.IsClosed = false;
+    }
 
     public void UpdateRoad()
     {
-        Path path = GetComponent<PathCreator>().path;
+        Path path = this.roadPath;
+        //Path path = GetComponent<PathCreator>().path;
         Vector2[] points = path.CalculateEvenlySpacedPoints(spacing);
-        GetComponent<MeshFilter>().mesh = CreateRoadMesh(points, path.IsClosed);
+        GetComponent<MeshFilter>().mesh = CreateRoadMesh(points, false);
 
         int textureRepeat = Mathf.RoundToInt(tiling * points.Length * spacing * .05f);
         GetComponent<MeshRenderer>().sharedMaterial.mainTextureScale = new Vector2(1, textureRepeat);
@@ -48,8 +57,17 @@ public class RoadCreator : MonoBehaviour
             forward.Normalize();
             Vector2 left = new Vector2(-forward.y, forward.x);
 
+            float heightVal = terrainMesh.GetHeight(points[i].x, points[i].y) * terrainMesh.heightScale;
+            if (heightVal < terrainMesh.waterLevel)
+            {
+                heightVal = terrainMesh.waterLevel;
+            }
+            float height = Mathf.Max(heightVal, terrainMesh.waterLevel);
+
             verts[vertIndex] = points[i] + left * roadWidth * .5f;
+            verts[vertIndex].z = -heightVal;//Mathf.Max(terrainMesh.GetHeight(points[i].x, points[i].y), -terrainMesh.waterLevel) * -terrainMesh.heightScale;
             verts[vertIndex + 1] = points[i] - left * roadWidth * .5f;
+            verts[vertIndex + 1].z = -heightVal; // Mathf.Max(terrainMesh.GetHeight(points[i].x, points[i].y), -terrainMesh.waterLevel) * -terrainMesh.heightScale;//terrainMesh.GetHeight(points[i].x, points[i].y) * -terrainMesh.heightScale;
 
             float completionPercent = i / (float)(points.Length - 1);
             float v = 1 - Mathf.Abs(2 * completionPercent - 1);

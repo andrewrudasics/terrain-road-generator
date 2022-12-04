@@ -10,6 +10,7 @@ public class MeshGenerator : MonoBehaviour
 {
     Mesh mesh;
     public GameObject waterPlane;
+    public GameObject roadObject;
 
 
     Vector3[] vertices;
@@ -57,6 +58,8 @@ public class MeshGenerator : MonoBehaviour
     TerrainNode[,] nodes;
     Dictionary<TerrainNode, List<TerrainNode>> nodeMasks;
 
+    Path roadPath;
+    
 
     // Start is called before the first frame update
     void Start()
@@ -76,6 +79,23 @@ public class MeshGenerator : MonoBehaviour
 
         tempPath = FindPath(nodes[7, 13], nodes[63, 63]);
         pathRenderer.positionCount = tempPath.Count;
+        
+        roadPath = new Path(new Vector2(7,13));
+
+        roadPath.IsClosed = false;
+        roadPath.AutoSetControlPoints = false;
+        for (int i = 0; i < tempPath.Count; i++)
+        {
+            roadPath.AddSegment(tempPath[i].gridPos);
+        }
+        roadPath.IsClosed = false;
+        
+        //roadPath.DeleteSegment(roadPath.NumPoints - 1);
+
+        RoadCreator creator = roadObject.GetComponent<RoadCreator>();
+        creator.SetPath(roadPath);
+        creator.UpdateRoad();
+
         Vector3[] pathPositions = new Vector3[tempPath.Count];
         for (int i = 0; i < tempPath.Count; i++)
         {
@@ -184,7 +204,7 @@ public class MeshGenerator : MonoBehaviour
     }
 
 
-    private float GetHeight(int x, int z)
+    public float GetHeight(int x, int z)
     {
         float xNrm = (1.0f * x + xOffset) / gridWidth;
         float zNrm = (1.0f * z + zOffset) / gridHeight;
@@ -196,7 +216,7 @@ public class MeshGenerator : MonoBehaviour
         return h1 + h2 + h3 + h4;
     }
 
-    private float GetHeight(float x, float z)
+    public float GetHeight(float x, float z)
     {
         float xNrm = (1.0f * x + xOffset) / gridWidth;
         float zNrm = (1.0f * z + zOffset) / gridHeight;
@@ -623,11 +643,23 @@ public class MeshGenerator : MonoBehaviour
     public void GetPath()
     {
         tempPath.Clear();
-        
-
-
         tempPath = FindPath(nodes[startX, startY], nodes[endX, endY]);
 
+        if (tempPath.Count > 0)
+        {
+            roadPath = new Path(tempPath[0].gridPos);
+            
+            for (int i = 0; i < tempPath.Count; i++)
+            {
+                roadPath.AddSegment(tempPath[i].gridPos);
+            }
+            roadPath.IsClosed = false;
+            roadPath.DeleteSegment(roadPath.NumPoints - 1);
+            RoadCreator creator = roadObject.GetComponent<RoadCreator>();
+            creator.SetPath(roadPath);
+            creator.UpdateRoad();
+
+        }
         // Process TempPath
         for (int i = 0; i < tempPath.Count; i++)
         {
