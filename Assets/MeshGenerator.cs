@@ -59,7 +59,11 @@ public class MeshGenerator : MonoBehaviour
     Dictionary<TerrainNode, List<TerrainNode>> nodeMasks;
 
     Path roadPath;
-    
+
+    private void Awake()
+    {
+        Screen.SetResolution(1080, 608, false);
+    }
 
     // Start is called before the first frame update
     void Start()
