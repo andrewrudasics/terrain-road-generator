@@ -2,12 +2,15 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Priority_Queue;
 
 
 [RequireComponent(typeof(MeshFilter))]
 public class MeshGenerator : MonoBehaviour
 {
     Mesh mesh;
+    public GameObject waterPlane;
+
 
     Vector3[] vertices;
     int[] triangles;
@@ -22,30 +25,64 @@ public class MeshGenerator : MonoBehaviour
 
     public float a1, a2, a3, a4;
     public float f1, f2, f3, f4;
+    public float xOffset, zOffset;
     public float heightScale;
+
+    public float waterLevel = 30.0f;
+
+    public float slopeInfluence = 1.0f;
+    public float distInfluence = 1.0f;
+    public float waterInfluence = 0.01f;
 
     private int meshWidth;
     private int meshHeight;
 
     private List<TerrainNode> tempMask;
     private List<TerrainNode> tempPath;
+    private LineRenderer pathRenderer;
+
+    public int startX = 0, startY = 0;
+    public int endX = 256, endY = 256;
+
+    public int StartX { get { return startX; } set { startX = value; } }
+    public int StartY { get { return startY; } set { startY = value; } }
+    public int EndX { get { return endX; } set { endX = value; } }
+    public int EndY { get { return endY; } set { endY = value; } }
+
+    public void SetStartX(int x)
+    {
+        startX = x;
+    }
 
     TerrainNode[,] nodes;
+    Dictionary<TerrainNode, List<TerrainNode>> nodeMasks;
 
 
     // Start is called before the first frame update
     void Start()
     {
+        nodeMasks = new Dictionary<TerrainNode, List<TerrainNode>>();
+        endX = gridWidth-1; endY = gridHeight-1;
+        pathRenderer = GetComponent<LineRenderer>();
         meshWidth = gridWidth * meshResolution;
         meshHeight = gridHeight * meshResolution;
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
         CreateShape();
         UpdateMesh();
+        
         tempMask = GenerateMask(7, 13);
+        CalculateMasks();
 
+        tempPath = FindPath(nodes[7, 13], nodes[63, 63]);
+        pathRenderer.positionCount = tempPath.Count;
+        Vector3[] pathPositions = new Vector3[tempPath.Count];
+        for (int i = 0; i < tempPath.Count; i++)
+        {
+            pathPositions[i] = tempPath[i].GetVertex();
+        }
 
-        tempPath = FindPath(nodes[7, 13], nodes[30, 55]);
+        pathRenderer.SetPositions(pathPositions);
 
         string path_out = "Path:";
         foreach (TerrainNode t in tempPath)
@@ -53,8 +90,29 @@ public class MeshGenerator : MonoBehaviour
             path_out += t.ToString() + "->";
         }
         Debug.Log(path_out);
+
+        for (int i = 1; i < tempPath.Count; i++)
+        {
+            Debug.DrawLine(tempPath[i - 1].GetVertex(), tempPath[i].GetVertex(), Color.red);
+        }
     }
 
+    void CalculateMasks()
+    {
+        if (nodes == null)
+        {
+            return;
+        }
+
+        for (int z = 0; z <= gridHeight; z++)
+        {
+            for (int x = 0; x <= gridHeight; x++)
+            {
+                TerrainNode curr = nodes[x, z];
+                nodeMasks.Add(curr, GenerateMask(x, z));
+            }
+        }
+    }
 
     void CreateShape()
     {
@@ -128,8 +186,8 @@ public class MeshGenerator : MonoBehaviour
 
     private float GetHeight(int x, int z)
     {
-        float xNrm = (1.0f * x) / gridWidth;
-        float zNrm = (1.0f * z) / gridHeight;
+        float xNrm = (1.0f * x + xOffset) / gridWidth;
+        float zNrm = (1.0f * z + zOffset) / gridHeight;
         float h1 = Mathf.PerlinNoise(xNrm * f1, zNrm * f1) * a1;
         float h2 = Mathf.PerlinNoise(xNrm * f2, zNrm * f2) * a2;
         float h3 = Mathf.PerlinNoise(xNrm * f3, zNrm * f3) * a3;
@@ -140,8 +198,8 @@ public class MeshGenerator : MonoBehaviour
 
     private float GetHeight(float x, float z)
     {
-        float xNrm = (1.0f * x) / gridWidth;
-        float zNrm = (1.0f * z) / gridHeight;
+        float xNrm = (1.0f * x + xOffset) / gridWidth;
+        float zNrm = (1.0f * z + zOffset) / gridHeight;
         float h1 = Mathf.PerlinNoise(xNrm * f1, zNrm * f1) * a1;
         float h2 = Mathf.PerlinNoise(xNrm * f2, zNrm * f2) * a2;
         float h3 = Mathf.PerlinNoise(xNrm * f3, zNrm * f3) * a3;
@@ -165,7 +223,7 @@ public class MeshGenerator : MonoBehaviour
                     Gizmos.color = Color.green;
                     Gizmos.DrawSphere(nodes[x, z].GetVertex(), 0.1f);
                 }
-                else if (x == 30 && z == 55)
+                else if (x == 63 && z == 63)
                 {
                     Gizmos.color = Color.red;
                     Gizmos.DrawSphere(nodes[x, z].GetVertex(), 0.1f);
@@ -217,7 +275,32 @@ public class MeshGenerator : MonoBehaviour
         return mask;
     }
 
-    List<TerrainNode> FindPath(TerrainNode start, TerrainNode end)
+    public List<TerrainNode> GenerateMask(int i, int j, float radius)
+    {
+        float radius2 = radius * radius;
+        List<TerrainNode> mask = new List<TerrainNode>();
+
+        for (int x = 0; x < gridWidth; x++)
+        {
+            for (int y = 0; y < gridHeight; y++)
+            {
+                if (i == x && j == y)
+                {
+                    continue;
+                }
+
+                if (TerrainNode.Distance2(nodes[x, y], nodes[i, j]) < radius2)
+                {
+                    mask.Add(nodes[x, y]);
+                }
+
+            }
+        }
+
+        return mask;
+    }
+
+    List<TerrainNode> SlowFindPath(TerrainNode start, TerrainNode end)
     {
         List<TerrainNode> path = new List<TerrainNode>();
 
@@ -251,7 +334,8 @@ public class MeshGenerator : MonoBehaviour
         front.prev = null;
         open.Add(front);
 
-        while(open.Count > 0)
+
+        while (open.Count > 0)
         {
             // Find the lowest value
             float lowestCost = float.MaxValue;
@@ -270,36 +354,50 @@ public class MeshGenerator : MonoBehaviour
             SearchNode curr = open[lowestIndex];
             open.RemoveAt(lowestIndex);
 
+
             // Check if its the goal
             if (curr.Equals(goal))
             {
                 // If it is return the path
                 // Back propogate and build the path
-                
+
                 //path.Insert(path.Count, );
                 while (curr != null)
                 {
                     path.Add(nodes[curr.Row, curr.Col]);
                     curr = curr.prev;
                 }
-                
+
                 return path;
             }
 
-            List<TerrainNode> mask = GenerateMask(curr.Row, curr.Col);
-            foreach(TerrainNode t in mask)
+            List<TerrainNode> mask;
+            if (!nodeMasks.TryGetValue(nodes[curr.Row, curr.Col], out mask))
+            {
+                mask = GenerateMask(curr.Row, curr.Col);
+            }
+
+            foreach (TerrainNode t in mask)
             {
                 SearchNode sn = new SearchNode();
-                sn.givenCost = curr.givenCost +
-                                TerrainNode.Distance(
-                                    nodes[curr.Row, curr.Col],
-                                    nodes[t.Row, t.Col]
-                                );
+
+                TerrainNode ct = nodes[curr.Row, curr.Col];
+                TerrainNode tt = nodes[t.Row, t.Col];
+
+                float distCost = TerrainNode.Distance(ct, tt);
+
+                float slopeCost = SlopeCost(ct, tt);
+
+
+
+                sn.givenCost = curr.givenCost + distCost + (slopeInfluence * slopeCost);
+
 
                 sn.heuristicCost = TerrainNode.Distance(
                                     end,
                                     nodes[t.Row, t.Col]
                                 );
+
 
                 sn.Row = t.Row;
                 sn.Col = t.Col;
@@ -309,16 +407,18 @@ public class MeshGenerator : MonoBehaviour
                 bool onClosed = closed.Contains(sn);
 
                 if (!onOpen && !onClosed)
-                {
+                {                 
                     open.Add(sn);
                 }
-                
+
                 if (onOpen || onClosed)
                 {
                     if (onOpen)
                     {
                         for (int i = 0; i < open.Count; i++)
                         {
+
+
                             if (open[i].Equals(sn) && sn.Cost < open[i].Cost)
                             {
                                 open[i].givenCost = sn.givenCost;
@@ -339,15 +439,283 @@ public class MeshGenerator : MonoBehaviour
                         }
                     }
                 }
+
+            }
+            
+            closed.Add(curr);
+
+        }
+
+        // If path is empty, no path found
+        return path;
+    }
+
+    List<TerrainNode> FindPath(TerrainNode start, TerrainNode end)
+    {
+        List<TerrainNode> path = new List<TerrainNode>();
+
+        float timeout = 2.0f;
+        float start_time = Time.time;
+
+        SearchNode goal = new SearchNode();
+        goal.Row = end.Row;
+        goal.Col = end.Col;
+
+        List<SearchNode> open = new List<SearchNode>();
+        List<SearchNode> closed = new List<SearchNode>();
+        SearchNode front = new SearchNode();
+        front.givenCost = 0;
+        front.heuristicCost = TerrainNode.Distance(start, end);
+        front.Row = start.Row;
+        front.Col = start.Col;
+        front.prev = null;
+        
+        
+
+        SimplePriorityQueue<SearchNode> open_pq = new SimplePriorityQueue<SearchNode>();
+        HashSet<SearchNode> closed_set = new HashSet<SearchNode>();
+        open_pq.Enqueue(front, front.Cost);
+
+        while (open_pq.Count > 0)
+        {
+            if (Time.time - start_time > timeout)
+            {
+                return path;
+            }
+
+            // Pop the top
+            SearchNode curr = open_pq.Dequeue();
+
+            // Check if its the goal
+            if (curr.Equals(goal))
+            {
+                // If it is return the path
+                // Back propogate and build the path
+                
+                //path.Insert(path.Count, );
+                while (curr != null)
+                {
+                    path.Add(nodes[curr.Row, curr.Col]);
+                    curr = curr.prev;
+                }
+                
+                return path;
+            }
+
+            List<TerrainNode> mask;
+            if (!nodeMasks.TryGetValue(nodes[curr.Row, curr.Col], out mask))
+            {
+                mask = GenerateMask(curr.Row, curr.Col);
+            }
+             
+            foreach(TerrainNode t in mask)
+            {
+
+                if (Time.time - start_time > timeout)
+                {
+                    return path;
+                }
+                SearchNode sn = new SearchNode();
+
+                TerrainNode ct = nodes[curr.Row, curr.Col];
+                TerrainNode tt = nodes[t.Row, t.Col];
+
+                float distCost = TerrainNode.Distance(ct, tt);
+
+                float slopeCost = SlopeCost(ct, tt);
+
+                float waterCost = WaterCost(tt);
+
+                sn.givenCost = curr.givenCost + (distInfluence * distCost) + (slopeInfluence * slopeCost) + (waterInfluence * waterCost);
+                                
+
+                sn.heuristicCost = TerrainNode.Distance(
+                                    end,
+                                    nodes[t.Row, t.Col]
+                                );
+
+
+                sn.Row = t.Row;
+                sn.Col = t.Col;
+                sn.prev = curr;
+
+                bool onOpen = open_pq.Contains(sn);
+                bool onClosed = closed_set.Contains(sn);
+
+
+                if (!onOpen && !onClosed)
+                {
+                    open_pq.Enqueue(sn, sn.Cost);
+                }
+                
+                if (onOpen || onClosed)
+                {
+                    if (onOpen)
+                    {
+
+                        float cost = open_pq.GetPriority(sn);
+                        if (sn.Cost < cost)
+                        {
+                            open_pq.Remove(sn);
+                            open_pq.Enqueue(sn, sn.Cost);
+                        }
+                    }
+                    else if (onClosed)
+                    {
+                        SearchNode outNode;
+                        closed_set.TryGetValue(sn, out outNode);
+                        float cost = outNode.Cost;
+
+                        if (sn.Cost < cost)
+                        {
+                            closed_set.Remove(sn);
+                            open_pq.Enqueue(sn, sn.Cost);
+                        }
+
+                    }
+                }
                 
             }
-            closed.Add(curr);
+            closed_set.Add(curr);
             
         }
 
         // If path is empty, no path found
         return path;
     }
+
+    float SlopeCost(TerrainNode curr, TerrainNode next)
+    {
+        float diffH = next.height - curr.height;
+        float diffX = next.Row - curr.Row;
+        float diffY = next.Col - curr.Col;
+
+        float flatDist = Mathf.Sqrt((diffX * diffX) + (diffY * diffY));
+        
+        if (Mathf.Approximately(flatDist, 0.0f))
+        {
+            if (Mathf.Approximately(diffH, 0))
+                return 0;
+            else
+                return float.MaxValue;
+        }
+
+        return diffH / flatDist;
+    }
+
+    float WaterCost(TerrainNode next)
+    {
+        float cost = Mathf.Max(waterLevel - next.height, 0.0f);
+        return cost;
+    }
+
+    float FlatDistanceCost(TerrainNode curr, TerrainNode next)
+    {
+        float diffX = next.Row - curr.Row;
+        float diffY = next.Col - curr.Col;
+        float flatDist = Mathf.Sqrt((diffX * diffX) + (diffY * diffY));
+
+        return flatDist;
+    }
+
+
+
+    public void GetPath()
+    {
+        tempPath.Clear();
+        
+
+
+        tempPath = FindPath(nodes[startX, startY], nodes[endX, endY]);
+
+        // Process TempPath
+        for (int i = 0; i < tempPath.Count; i++)
+        {
+            if (tempPath[i].GetVertex().y < waterLevel)
+            {
+                if (i > 0)
+                {
+                    tempPath[i].height = Mathf.Max(waterLevel, tempPath[i - 1].height);
+                }
+                else
+                {
+                    tempPath[i].height = waterLevel;
+                }
+            }
+        }
+
+
+        pathRenderer.positionCount = tempPath.Count;
+
+
+
+        Vector3[] pathPositions = new Vector3[tempPath.Count];
+        for (int i = 0; i < tempPath.Count; i++)
+        {
+            pathPositions[i] = tempPath[i].GetVertex();
+        }
+
+        pathRenderer.SetPositions(pathPositions);
+
+        string path_out = "Path:";
+        foreach (TerrainNode t in tempPath)
+        {
+            path_out += t.ToString() + "->";
+        }
+        Debug.Log(path_out);
+    }
+
+    public void GetTerrain()
+    {
+        CreateShape();
+        UpdateMesh();
+    }
+
+    #region GettersAndSetters
+
+    public void SetSlopeInfluence(float f)
+    {
+        slopeInfluence = f;
+    }
+
+    public void SetDistInfluence(float f)
+    {
+        distInfluence = f;
+    }
+    public void SetWaterInfluence(float f)
+    {
+        waterInfluence = f;
+    }
+
+    public void SetStartX(string val)
+    {
+        startX = int.Parse(val);
+    }
+
+    public void SetStartY(string val)
+    {
+        startY = int.Parse(val);
+    }
+
+    public void SetEndX(string val)
+    {
+        endX = int.Parse(val);
+    }
+
+    public void SetEndY(string val)
+    {
+        endY = int.Parse(val);
+    }
+
+    public void SetWaterLevel(float height)
+    {
+        waterLevel = height;
+        Vector3 curr_pos = waterPlane.transform.position;
+        curr_pos.y = waterLevel;
+        waterPlane.transform.position = curr_pos;
+    }
+
+    #endregion
 }
 
 public class SearchNode : IComparable<SearchNode>
@@ -394,6 +762,11 @@ public class SearchNode : IComparable<SearchNode>
         }
 
         return false;
+    }
+
+    public override int GetHashCode()
+    {
+        return this.Row.GetHashCode() + (this.Col.GetHashCode() << 3);
     }
 }
 
